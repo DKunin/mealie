@@ -178,3 +178,9 @@ frontend/eslint.config.deprecated.js
 
 # Playwright MCP screenshots, snapshots, and console logs
 .playwright-mcp/
+
+# Kunini production state
+/data/
+/secrets/
+/deployment/kunini/.env
+/deployment/kunini/acme/
