@@ -10,7 +10,8 @@ cleanup() {
 }
 trap cleanup EXIT
 
-curl --fail --silent --show-error http://127.0.0.1:9001/api/app/about >"${temporary_dir}/about.json"
+curl --noproxy '*' --fail --silent --show-error \
+    http://127.0.0.1:9001/api/app/about >"${temporary_dir}/about.json"
 jq -e '.version | contains("3.30.0")' "${temporary_dir}/about.json" >/dev/null
 
 health="$(docker inspect mealie --format '{{.State.Health.Status}}')"
@@ -29,13 +30,13 @@ fi
 docker exec mealie python -c \
     'from mealie.lang.locale_config import LOCALE_CONFIG; assert "ru-RU" in LOCALE_CONFIG' >/dev/null
 
-http_status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+http_status="$(curl --noproxy '*' --silent --output /dev/null --write-out '%{http_code}' \
     --resolve "${domain}:80:127.0.0.1" "http://${domain}/")"
-https_status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+https_status="$(curl --noproxy '*' --silent --output /dev/null --write-out '%{http_code}' \
     --resolve "${domain}:443:127.0.0.1" "https://${domain}/")"
-anonymous_status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+anonymous_status="$(curl --noproxy '*' --silent --output /dev/null --write-out '%{http_code}' \
     --resolve "${domain}:443:127.0.0.1" "https://${domain}/api/users/self")"
-locale_cookie="$(curl --silent --head --resolve "${domain}:443:127.0.0.1" \
+locale_cookie="$(curl --noproxy '*' --silent --head --resolve "${domain}:443:127.0.0.1" \
     "https://${domain}/" | tr -d '\r' | awk 'tolower($1) == "set-cookie:" && $2 ~ /^i18n_redirected=ru-RU/ { print $2 }')"
 
 openssl s_client -connect 127.0.0.1:443 -servername "${domain}" </dev/null 2>/dev/null \

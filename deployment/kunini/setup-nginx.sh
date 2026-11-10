@@ -35,7 +35,7 @@ restore_site() {
     sudo -n "${apply_helper}" "${site_name}"
 }
 
-curl --fail --silent --show-error http://127.0.0.1:9001/api/app/about >/dev/null
+curl --noproxy '*' --fail --silent --show-error http://127.0.0.1:9001/api/app/about >/dev/null
 install -d -m 0755 "${staging_dir}" "${challenge_dir}"
 if [[ -s "${staged_config}" ]]; then
     install -m 0600 "${staged_config}" "${backup_config}"
@@ -57,9 +57,15 @@ challenge_name="mealie-preflight-$$"
 challenge_value="mealie-${RANDOM}-${RANDOM}"
 challenge_path="${challenge_dir}/${challenge_name}"
 printf '%s' "${challenge_value}" >"${challenge_path}"
-served_value="$(curl --fail --silent --show-error --max-time 15 \
-    --resolve "${domain}:80:127.0.0.1" \
-    "http://${domain}/.well-known/acme-challenge/${challenge_name}")"
+served_value=""
+for _ in $(seq 1 10); do
+    if served_value="$(curl --noproxy '*' --fail --silent --show-error --max-time 15 \
+        --resolve "${domain}:80:127.0.0.1" \
+        "http://${domain}/.well-known/acme-challenge/${challenge_name}")"; then
+        break
+    fi
+    sleep 1
+done
 if [[ "${served_value}" != "${challenge_value}" ]]; then
     restore_site
     echo "The ACME challenge path is not served by Nginx." >&2

@@ -23,7 +23,7 @@ docker compose up -d --remove-orphans
 for _ in $(seq 1 90); do
     health="$(docker inspect mealie --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' 2>/dev/null || true)"
     if [[ "${health}" == "healthy" ]]; then
-        curl --fail --silent --show-error http://127.0.0.1:9001/api/app/about >/dev/null
+        curl --noproxy '*' --fail --silent --show-error http://127.0.0.1:9001/api/app/about >/dev/null
         printf 'Mealie is healthy on 127.0.0.1:9001.\n'
         exit 0
     fi

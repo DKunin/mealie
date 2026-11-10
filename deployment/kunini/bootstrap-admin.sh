@@ -38,7 +38,7 @@ login() {
     local username="$1"
     local password="$2"
     local status
-    status="$(curl --silent --show-error --output "${token_file}" --write-out '%{http_code}' \
+    status="$(curl --noproxy '*' --silent --show-error --output "${token_file}" --write-out '%{http_code}' \
         --request POST \
         --data-urlencode "username=${username}" \
         --data-urlencode "password=${password}" \
@@ -68,7 +68,7 @@ self_file="${temporary_dir}/self.json"
 update_file="${temporary_dir}/update.json"
 password_change_file="${temporary_dir}/password-change.json"
 
-curl --fail --silent --show-error --header "${auth_header}" \
+curl --noproxy '*' --fail --silent --show-error --header "${auth_header}" \
     "${base_url}/api/users/self" >"${self_file}"
 
 jq --arg username "${admin_username}" \
@@ -96,7 +96,7 @@ user_id="$(jq -er '.id' "${self_file}")"
 if [[ "${password_needs_change}" == "true" ]]; then
     jq -n --arg current_password 'MyPassword' --arg new_password "${new_password}" \
         '{currentPassword: $current_password, newPassword: $new_password}' >"${password_change_file}"
-    curl --fail --silent --show-error --request PUT \
+    curl --noproxy '*' --fail --silent --show-error --request PUT \
         --header "${auth_header}" \
         --header 'Content-Type: application/json' \
         --data-binary "@${password_change_file}" \
@@ -110,7 +110,7 @@ if [[ "${password_needs_change}" == "true" ]]; then
     auth_header="Authorization: Bearer ${token}"
 fi
 
-curl --fail --silent --show-error --request PUT \
+curl --noproxy '*' --fail --silent --show-error --request PUT \
     --header "${auth_header}" \
     --header 'Content-Type: application/json' \
     --data-binary "@${update_file}" \
@@ -121,7 +121,7 @@ if ! login "${admin_username}" "${new_password}"; then
     exit 1
 fi
 
-default_status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+default_status="$(curl --noproxy '*' --silent --output /dev/null --write-out '%{http_code}' \
     --request POST \
     --data-urlencode 'username=changeme@example.com' \
     --data-urlencode 'password=MyPassword' \
