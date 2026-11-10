@@ -10,6 +10,18 @@ SPEC.loader.exec_module(IMPORTER)
 
 
 class ImporterTest(unittest.TestCase):
+    def test_all_items_follows_snake_case_pagination_envelope(self):
+        api = IMPORTER.MealieApi("http://mealie.invalid", "token")
+        responses = iter(
+            [
+                {"items": [{"id": "one"}], "page": 1, "total_pages": 2},
+                {"items": [{"id": "two"}], "page": 2, "total_pages": 2},
+            ]
+        )
+        api.request = lambda _method, _path: next(responses)
+
+        self.assertEqual(api.all_items("/api/foods"), [{"id": "one"}, {"id": "two"}])
+
     def test_food_catalog_deduplicates_source_ids_with_the_same_canonical_name(self):
         recipes = [
             {

@@ -97,7 +97,7 @@ class MealieApi:
             query = urllib.parse.urlencode({"page": page, "perPage": 100})
             response = self.request("GET", f"{path}?{query}")
             items.extend(response["items"])
-            if page >= response["totalPages"]:
+            if page >= response["total_pages"]:
                 return items
             page += 1
 
