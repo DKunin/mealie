@@ -475,6 +475,12 @@ def import_recipes(api: MealieApi, recipes: list[ParsedRecipe], limit: int | Non
                 f"/api/recipes/{urllib.parse.quote(slug)}",
                 recipe_payload(recipe, food_items, unit_items, category_items, tag_items),
             )
+        except ApiError as error:
+            api.request("DELETE", f"/api/recipes/{urllib.parse.quote(slug)}")
+            if "Recipe already exists" in str(error):
+                skipped_name_conflicts += 1
+                continue
+            raise
         except Exception:
             api.request("DELETE", f"/api/recipes/{urllib.parse.quote(slug)}")
             raise

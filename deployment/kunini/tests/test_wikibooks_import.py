@@ -75,6 +75,59 @@ class WikibooksImporterTest(unittest.TestCase):
         self.assertEqual(len(parsed.ingredients), 2)
         self.assertEqual(parsed.instructions, ["Запечь баклажаны", "Смешать с тахини"])
 
+    def test_import_treats_normalized_slug_collision_as_name_conflict(self):
+        class FakeApi:
+            def __init__(self):
+                self.deleted = []
+
+            def all_items(self, _path):
+                return []
+
+            def request(self, method, path, payload=None):
+                if method == "POST" and path == "/api/recipes":
+                    return "conflict-1"
+                if method == "PUT" and path.startswith("/api/recipes/"):
+                    raise importer.ApiError("Recipe already exists")
+                if method == "DELETE":
+                    self.deleted.append(path)
+                    return {}
+                if method == "POST":
+                    return {"id": path, "name": payload["name"]}
+                raise AssertionError((method, path, payload))
+
+        recipe = importer.ParsedRecipe(
+            source={
+                "pageId": 1,
+                "revisionId": 2,
+                "sourceUrl": "https://ru.wikibooks.org/w/index.php?oldid=2",
+                "image": {
+                    "url": "https://upload.wikimedia.org/example.jpg",
+                    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Example.jpg",
+                    "author": "Автор",
+                    "license": "CC BY-SA 4.0",
+                    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+                },
+            },
+            name="Наси горенг",
+            description="",
+            category="Вторые блюда",
+            cuisine="",
+            servings=2,
+            total_time_seconds=None,
+            ingredients=[
+                importer.ParsedIngredient("рис", 1, "стакан", "1 стакан риса"),
+                importer.ParsedIngredient("вода", 2, "стакан", "2 стакана воды"),
+            ],
+            instructions=["Приготовить"],
+        )
+        api = FakeApi()
+
+        result = importer.import_recipes(api, [recipe])
+
+        self.assertEqual(result["createdRecipes"], 0)
+        self.assertEqual(result["skippedNameConflicts"], 1)
+        self.assertEqual(api.deleted, ["/api/recipes/conflict-1"])
+
 
 class RecipeImageTest(unittest.TestCase):
     def test_choose_source_prefers_explicit_unitools_photo(self):
