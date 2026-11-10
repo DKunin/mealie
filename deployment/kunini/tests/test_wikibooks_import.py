@@ -160,6 +160,9 @@ class RecipeImageTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "not allowed"):
             images.download_image(source)
 
+    def test_official_wikimedia_thumbnail_host_is_allowed(self):
+        self.assertIn("thumb.wikimedia.org", images.ALLOWED_IMAGE_HOSTS)
+
 
 if __name__ == "__main__":
     unittest.main()

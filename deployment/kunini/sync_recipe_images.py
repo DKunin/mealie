@@ -19,7 +19,7 @@ from typing import Any
 
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
 USER_AGENT = "KuniniMealieImporter/1.0 (personal self-hosted instance; https://meal.kunini.ru)"
-ALLOWED_IMAGE_HOSTS = {"theunitools.com", "upload.wikimedia.org"}
+ALLOWED_IMAGE_HOSTS = {"theunitools.com", "upload.wikimedia.org", "thumb.wikimedia.org"}
 MAX_IMAGE_BYTES = 12 * 1024 * 1024
 CONTENT_EXTENSIONS = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
 TAG = re.compile(r"<[^>]+>")
@@ -149,49 +149,58 @@ class CommonsResolver:
         key = query.casefold()
         if key in self.cache:
             return self.cache[key]
-        response = self.request(
-            {
-                "action": "query",
-                "generator": "search",
-                "gsrsearch": f'filetype:bitmap "{query}" food',
-                "gsrnamespace": "6",
-                "gsrlimit": "10",
-                "prop": "imageinfo",
-                "iiprop": "url|mime|extmetadata",
-                "iiurlwidth": "1600",
-            }
-        )
-        candidates: list[tuple[int, ImageSource]] = []
         query_tokens = {token for token in re.findall(r"[\w-]+", query.casefold()) if len(token) > 2}
-        for page in response.get("query", {}).get("pages", []):
-            if not page.get("imageinfo"):
-                continue
-            info = page["imageinfo"][0]
-            mime = str(info.get("mime") or "")
-            if mime not in CONTENT_EXTENSIONS:
-                continue
-            metadata = info.get("extmetadata") or {}
-            license_name = plain_metadata(metadata.get("LicenseShortName")) or plain_metadata(
-                metadata.get("UsageTerms")
+        selected = None
+        expressions = (f'filetype:bitmap "{query}" food', f"filetype:bitmap {query}")
+        for expression_index, expression in enumerate(expressions):
+            response = self.request(
+                {
+                    "action": "query",
+                    "generator": "search",
+                    "gsrsearch": expression,
+                    "gsrnamespace": "6",
+                    "gsrlimit": "10",
+                    "prop": "imageinfo",
+                    "iiprop": "url|mime|extmetadata",
+                    "iiurlwidth": "1600",
+                }
             )
-            if not is_free_license(license_name):
-                continue
-            title_tokens = set(re.findall(r"[\w-]+", page["title"].casefold()))
-            score = len(query_tokens & title_tokens)
-            candidates.append(
-                (
-                    score,
-                    ImageSource(
-                        url=str(info.get("thumburl") or info["url"]),
-                        source_url=str(info.get("descriptionurl") or ""),
-                        author=plain_metadata(metadata.get("Artist")),
-                        license=license_name,
-                        license_url=plain_metadata(metadata.get("LicenseUrl")),
-                        origin="Wikimedia Commons search",
-                    ),
+            candidates: list[tuple[int, ImageSource]] = []
+            for page in response.get("query", {}).get("pages", []):
+                if not page.get("imageinfo"):
+                    continue
+                info = page["imageinfo"][0]
+                mime = str(info.get("mime") or "")
+                if mime not in CONTENT_EXTENSIONS:
+                    continue
+                metadata = info.get("extmetadata") or {}
+                license_name = plain_metadata(metadata.get("LicenseShortName")) or plain_metadata(
+                    metadata.get("UsageTerms")
                 )
-            )
-        selected = max(candidates, key=lambda item: item[0])[1] if candidates else None
+                if not is_free_license(license_name):
+                    continue
+                title_tokens = set(re.findall(r"[\w-]+", page["title"].casefold()))
+                score = len(query_tokens & title_tokens)
+                candidates.append(
+                    (
+                        score,
+                        ImageSource(
+                            url=str(info.get("thumburl") or info["url"]),
+                            source_url=str(info.get("descriptionurl") or ""),
+                            author=plain_metadata(metadata.get("Artist")),
+                            license=license_name,
+                            license_url=plain_metadata(metadata.get("LicenseUrl")),
+                            origin="Wikimedia Commons search",
+                        ),
+                    )
+                )
+            if candidates:
+                best = max(candidates, key=lambda item: item[0])
+                # A broad search may match arbitrary page text. Require at least
+                # one title token; the exact-phrase query is already restrictive.
+                if expression_index == 0 or best[0] > 0:
+                    selected = best[1]
+                    break
         self.cache[key] = selected
         time.sleep(1.25)
         return selected
@@ -261,7 +270,7 @@ def choose_source(
 
     if unitools and allow_commons_search:
         english_name = str(unitools.get("name", {}).get("en") or recipe["name"])
-        return commons.search(english_name)
+        return commons.search(english_name) or commons.search(recipe["name"])
     return None
 
 
