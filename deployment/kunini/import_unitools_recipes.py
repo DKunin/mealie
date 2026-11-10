@@ -161,13 +161,16 @@ def recipe_payload(
     food_by_source: dict[str, dict[str, Any]],
     canonical_by_source: dict[str, str],
     unit_by_source: dict[str, dict[str, Any]],
+    category_by_name: dict[str, dict[str, Any]],
+    tag_by_name: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
     country = countries[recipe["country"]]
     category = CATEGORIES[recipe["category"]]
-    categories = [{"name": category}, {"name": country["cuisine"]["ru"].capitalize()}]
-    tags = [{"name": DIFFICULTY[recipe["difficulty"]]}]
-    tags.extend({"name": DIETS[diet]} for diet in recipe.get("diets", []))
-    tags.append({"name": "UniTools CC BY-SA 4.0"})
+    category_names = [category, country["cuisine"]["ru"].capitalize()]
+    tag_names = [DIFFICULTY[recipe["difficulty"]], *(DIETS[diet] for diet in recipe.get("diets", []))]
+    tag_names.append("UniTools CC BY-SA 4.0")
+    categories = [category_by_name[name.casefold()] for name in category_names]
+    tags = [tag_by_name[name.casefold()] for name in tag_names]
 
     ingredients = []
     for ingredient in recipe["ingredients"]:
@@ -285,6 +288,16 @@ def ensure_foods(
     return result
 
 
+def ensure_named_items(api: MealieApi, path: str, names: set[str]) -> dict[str, dict[str, Any]]:
+    existing = api.all_items(path)
+    by_name = {item["name"].casefold(): item for item in existing}
+    for name in sorted(names, key=str.casefold):
+        key = name.casefold()
+        if key not in by_name:
+            by_name[key] = api.request("POST", path, {"name": name})
+    return {name.casefold(): by_name[name.casefold()] for name in names}
+
+
 def import_recipes(api: MealieApi, data: dict[str, Any], limit: int | None = None) -> dict[str, int]:
     recipes = data["recipes"][:limit]
     catalog, canonical_by_source = food_catalog(data["recipes"])
@@ -292,6 +305,13 @@ def import_recipes(api: MealieApi, data: dict[str, Any], limit: int | None = Non
     unit_by_source = ensure_units(api, source_units)
     food_by_source = ensure_foods(api, catalog, canonical_by_source)
     countries = {country["code"]: country for country in data["countries"]}
+    category_names = {CATEGORIES[recipe["category"]] for recipe in recipes}
+    category_names.update(countries[recipe["country"]]["cuisine"]["ru"].capitalize() for recipe in recipes)
+    tag_names = {DIFFICULTY[recipe["difficulty"]] for recipe in recipes}
+    tag_names.update(DIETS[diet] for recipe in recipes for diet in recipe.get("diets", []))
+    tag_names.add("UniTools CC BY-SA 4.0")
+    category_by_name = ensure_named_items(api, "/api/organizers/categories", category_names)
+    tag_by_name = ensure_named_items(api, "/api/organizers/tags", tag_names)
 
     existing = api.all_items("/api/recipes")
     existing_by_name = {item["name"].casefold(): item for item in existing}
@@ -312,7 +332,16 @@ def import_recipes(api: MealieApi, data: dict[str, Any], limit: int | None = Non
             saved = api.request(
                 "PUT",
                 f"/api/recipes/{urllib.parse.quote(slug)}",
-                recipe_payload(recipe, data, countries, food_by_source, canonical_by_source, unit_by_source),
+                recipe_payload(
+                    recipe,
+                    data,
+                    countries,
+                    food_by_source,
+                    canonical_by_source,
+                    unit_by_source,
+                    category_by_name,
+                    tag_by_name,
+                ),
             )
         except Exception:
             api.request("DELETE", f"/api/recipes/{urllib.parse.quote(slug)}")
@@ -328,6 +357,8 @@ def import_recipes(api: MealieApi, data: dict[str, Any], limit: int | None = Non
         "sourceRecipes": len(recipes),
         "normalizedFoods": len(catalog),
         "units": len(source_units),
+        "categories": len(category_names),
+        "tags": len(tag_names),
     }
 
 

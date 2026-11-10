@@ -22,6 +22,25 @@ class ImporterTest(unittest.TestCase):
 
         self.assertEqual(api.all_items("/api/foods"), [{"id": "one"}, {"id": "two"}])
 
+    def test_ensure_named_items_reuses_existing_and_creates_missing(self):
+        class FakeApi:
+            def __init__(self):
+                self.created = []
+
+            def all_items(self, _path):
+                return [{"id": "existing", "name": "Супы"}]
+
+            def request(self, _method, _path, payload):
+                self.created.append(payload["name"])
+                return {"id": "created", "name": payload["name"]}
+
+        api = FakeApi()
+        result = IMPORTER.ensure_named_items(api, "/api/organizers/categories", {"Супы", "Десерты"})
+
+        self.assertEqual(api.created, ["Десерты"])
+        self.assertEqual(result["супы"]["id"], "existing")
+        self.assertEqual(result["десерты"]["id"], "created")
+
     def test_food_catalog_deduplicates_source_ids_with_the_same_canonical_name(self):
         recipes = [
             {
