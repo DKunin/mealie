@@ -154,6 +154,23 @@ class RecipeImageTest(unittest.TestCase):
         self.assertEqual(source.origin, "UniTools / Wikimedia Commons")
         self.assertEqual(source.license, "CC BY 2.0")
 
+    def test_choose_source_rejects_unitools_photo_without_license(self):
+        source = images.choose_source(
+            {"name": "Мангу", "extras": {"unitoolsSlug": "mangu"}},
+            {
+                "mangu": {
+                    "name": {"ru": "Мангу", "en": "Mangú"},
+                    "photo": {"url": "https://theunitools.com/recipes/mangu.jpg", "license": ""},
+                }
+            },
+            {},
+            {},
+            images.CommonsResolver(),
+            False,
+        )
+
+        self.assertIsNone(source)
+
     def test_download_rejects_unapproved_hosts_before_network(self):
         source = images.ImageSource("https://example.com/image.jpg", "", "", "CC0", "", "test")
 

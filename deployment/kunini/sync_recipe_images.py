@@ -244,7 +244,7 @@ def unitools_fallback_source(
     ranked: list[tuple[int, str, dict[str, Any]]] = []
     for candidate in candidates:
         photo = candidate.get("photo") or {}
-        if candidate.get("slug") == target.get("slug") or not photo.get("url"):
+        if candidate.get("slug") == target.get("slug") or not photo.get("url") or not photo.get("license"):
             continue
         ingredients = {ingredient["id"] for ingredient in candidate.get("ingredients", [])}
         score = 0
@@ -293,7 +293,7 @@ def choose_source(
     )
     if unitools:
         photo = unitools.get("photo") or {}
-        if photo.get("url"):
+        if photo.get("url") and photo.get("license"):
             return ImageSource(
                 url=photo["url"],
                 source_url=photo["url"],
@@ -408,19 +408,6 @@ def sync_images(
             if note.get("title") != "Изображение и лицензия"
         ]
         notes.append(attribution_note(source))
-        if summary.get("image"):
-            try:
-                api.request(
-                    "PATCH",
-                    f"/api/recipes/{urllib.parse.quote(slug)}",
-                    {"extras": extras, "notes": notes},
-                )
-            except Exception as error:
-                failures.append(f"{recipe['name']}: {error}")
-                continue
-            metadata_updated += 1
-            source_counts[source.origin] = source_counts.get(source.origin, 0) + 1
-            continue
         try:
             content, extension, content_type = download_image(source)
             api.upload_image(slug, content, extension, content_type)
