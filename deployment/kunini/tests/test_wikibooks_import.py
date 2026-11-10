@@ -163,6 +163,39 @@ class RecipeImageTest(unittest.TestCase):
     def test_official_wikimedia_thumbnail_host_is_allowed(self):
         self.assertIn("thumb.wikimedia.org", images.ALLOWED_IMAGE_HOSTS)
 
+    def test_unitools_fallback_prefers_same_country_and_shared_ingredients(self):
+        target = {
+            "slug": "rare-dish",
+            "country": "OM",
+            "category": "main",
+            "ingredients": [{"id": "lamb"}, {"id": "onion"}],
+        }
+        candidates = [
+            {
+                "slug": "same-category",
+                "country": "XX",
+                "category": "main",
+                "name": {"ru": "Другое блюдо"},
+                "ingredients": [{"id": "lamb"}],
+                "photo": {"url": "https://theunitools.com/other.jpg", "license": "CC0"},
+            },
+            {
+                "slug": "same-country",
+                "country": "OM",
+                "category": "main",
+                "name": {"ru": "Похожее блюдо"},
+                "ingredients": [{"id": "lamb"}, {"id": "onion"}],
+                "photo": {"url": "https://theunitools.com/similar.jpg", "license": "CC BY 4.0"},
+            },
+        ]
+
+        source = images.unitools_fallback_source(target, candidates)
+
+        self.assertIsNotNone(source)
+        assert source
+        self.assertEqual(source.url, "https://theunitools.com/similar.jpg")
+        self.assertIn("иллюстративное", source.origin)
+
 
 if __name__ == "__main__":
     unittest.main()

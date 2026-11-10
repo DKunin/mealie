@@ -23,6 +23,13 @@ ALLOWED_IMAGE_HOSTS = {"theunitools.com", "upload.wikimedia.org", "thumb.wikimed
 MAX_IMAGE_BYTES = 12 * 1024 * 1024
 CONTENT_EXTENSIONS = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
 TAG = re.compile(r"<[^>]+>")
+COMMONS_QUERY_OVERRIDES = {
+    "pelekie-zirni-ar-speki": "Grey peas Latvia",
+    "rupjmaizes-kartojums": "Rupjmaizes kārtojums",
+    "halloumi-grilled": "halloumi watermelon",
+    "salo-po-ukrainski": "salo pepper garlic",
+    "shakshuka-tunisian": "shakshouka",
+}
 
 
 class ApiError(RuntimeError):
@@ -230,6 +237,38 @@ def wikibooks_source(recipe: dict[str, Any]) -> ImageSource:
     )
 
 
+def unitools_fallback_source(
+    target: dict[str, Any], candidates: list[dict[str, Any]]
+) -> ImageSource | None:
+    target_ingredients = {ingredient["id"] for ingredient in target.get("ingredients", [])}
+    ranked: list[tuple[int, str, dict[str, Any]]] = []
+    for candidate in candidates:
+        photo = candidate.get("photo") or {}
+        if candidate.get("slug") == target.get("slug") or not photo.get("url"):
+            continue
+        ingredients = {ingredient["id"] for ingredient in candidate.get("ingredients", [])}
+        score = 0
+        if candidate.get("country") == target.get("country"):
+            score += 100
+        if candidate.get("category") == target.get("category"):
+            score += 20
+        score += 5 * len(target_ingredients & ingredients)
+        ranked.append((score, str(candidate.get("slug") or ""), candidate))
+    if not ranked:
+        return None
+    _, _, donor = max(ranked, key=lambda item: (item[0], item[1]))
+    photo = donor["photo"]
+    donor_name = donor.get("name", {}).get("ru") or donor.get("slug")
+    return ImageSource(
+        url=photo["url"],
+        source_url=photo["url"],
+        author=str(photo.get("author") or ""),
+        license=str(photo.get("license") or ""),
+        license_url="",
+        origin=f"UniTools — иллюстративное фото похожего блюда «{donor_name}»",
+    )
+
+
 def choose_source(
     recipe: dict[str, Any],
     unitools_by_slug: dict[str, dict[str, Any]],
@@ -270,7 +309,12 @@ def choose_source(
 
     if unitools and allow_commons_search:
         english_name = str(unitools.get("name", {}).get("en") or recipe["name"])
-        return commons.search(english_name) or commons.search(recipe["name"])
+        override = COMMONS_QUERY_OVERRIDES.get(str(unitools.get("slug") or ""))
+        found = commons.search(override) if override else None
+        found = found or commons.search(english_name) or commons.search(recipe["name"])
+        if found:
+            return found
+        return unitools_fallback_source(unitools, list(unitools_by_slug.values()))
     return None
 
 
