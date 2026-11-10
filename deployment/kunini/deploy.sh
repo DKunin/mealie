@@ -4,6 +4,7 @@ set -euo pipefail
 app_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_dir="$(git -C "${app_dir}" rev-parse --show-toplevel)"
 data_dir="${MEALIE_DATA_DIR:-${repo_dir}/data}"
+secrets_dir="${MEALIE_SECRETS_DIR:-${repo_dir}/secrets}"
 
 for command in curl docker git; do
     if ! command -v "${command}" >/dev/null 2>&1; then
@@ -13,7 +14,16 @@ for command in curl docker git; do
 done
 
 install -d -m 0700 "${data_dir}"
+if [[ ! -s "${secrets_dir}/oidc-client-secret" ]]; then
+    echo "Missing OIDC client secret: ${secrets_dir}/oidc-client-secret" >&2
+    exit 1
+fi
+if [[ "$(stat -c '%a' "${secrets_dir}/oidc-client-secret")" != "600" ]]; then
+    echo "OIDC client secret must have mode 0600." >&2
+    exit 1
+fi
 export MEALIE_DATA_DIR="${data_dir}"
+export MEALIE_SECRETS_DIR="${secrets_dir}"
 
 cd "${app_dir}"
 docker compose config --quiet

@@ -9,6 +9,7 @@ services:
     ports:
       - "127.0.0.1:9001:9000"
     environment:
+      ALLOW_PASSWORD_LOGIN: "false"
       ALLOW_SIGNUP: "false"
       API_DOCS: "false"
       BASE_URL: https://meal.kunini.ru
@@ -16,14 +17,30 @@ services:
       DEFAULT_GROUP: "Дом"
       DEFAULT_HOUSEHOLD: "Семья"
       LOG_LEVEL: info
+      OIDC_AUTH_ENABLED: "true"
+      OIDC_AUTO_REDIRECT: "true"
+      OIDC_CLIENT_ID: mealie
+      OIDC_CONFIGURATION_URL: https://auth.kunini.ru/oidc/.well-known/openid-configuration
+      OIDC_GROUPS_CLAIM: roles
+      OIDC_NAME_CLAIM: name
+      OIDC_PROVIDER_NAME: Kunini
+      OIDC_REMEMBER_ME: "true"
+      OIDC_SIGNUP_ENABLED: "false"
+      OIDC_USER_CLAIM: preferred_username
       PGID: "1000"
       PUID: "1000"
       TZ: Europe/Moscow
     volumes:
       - ${MEALIE_DATA_DIR:-../../data}:/app/data
+    secrets:
+      - OIDC_CLIENT_SECRET
     security_opt:
       - no-new-privileges:true
     mem_limit: 1g
     cpus: 1.5
     pids_limit: 512
     stop_grace_period: 1m
+
+secrets:
+  OIDC_CLIENT_SECRET:
+    file: ${MEALIE_SECRETS_DIR:-../../secrets}/oidc-client-secret

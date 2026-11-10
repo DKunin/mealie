@@ -13,6 +13,8 @@ trap cleanup EXIT
 curl --noproxy '*' --fail --silent --show-error \
     http://127.0.0.1:9001/api/app/about >"${temporary_dir}/about.json"
 jq -e '.version | contains("3.30.0")' "${temporary_dir}/about.json" >/dev/null
+jq -e '.enableOidc == true and .oidcRedirect == true and .oidcProviderName == "Kunini" and .allowPasswordLogin == false' \
+    "${temporary_dir}/about.json" >/dev/null
 
 health="$(docker inspect mealie --format '{{.State.Health.Status}}')"
 published_port="$(docker port mealie 9000/tcp)"
@@ -38,16 +40,22 @@ anonymous_status="$(curl --noproxy '*' --silent --output /dev/null --write-out '
     --resolve "${domain}:443:127.0.0.1" "https://${domain}/api/users/self")"
 locale_cookie="$(curl --noproxy '*' --silent --head --resolve "${domain}:443:127.0.0.1" \
     "https://${domain}/" | tr -d '\r' | awk 'tolower($1) == "set-cookie:" && $2 ~ /^i18n_redirected=ru-RU/ { print $2 }')"
+curl --noproxy '*' --silent --show-error --dump-header "${temporary_dir}/oidc-headers.txt" --output /dev/null \
+    http://127.0.0.1:9001/api/auth/oauth
+oidc_location="$(tr -d '\r' <"${temporary_dir}/oidc-headers.txt" | sed -n 's/^[Ll]ocation: //p' | tail -n 1)"
 
 openssl s_client -connect 127.0.0.1:443 -servername "${domain}" </dev/null 2>/dev/null \
     | openssl x509 -noout -ext subjectAltName >"${temporary_dir}/certificate.txt"
 
 if [[ "${http_status}" != "301" || "${https_status}" != "200" \
-    || "${anonymous_status}" != "401" || -z "${locale_cookie}" ]] \
+    || "${anonymous_status}" != "401" || -z "${locale_cookie}" \
+    || "${oidc_location}" != https://auth.kunini.ru/oidc/authorize* \
+    || "${oidc_location}" != *"client_id=mealie"* \
+    || "${oidc_location}" != *"redirect_uri=https%3A%2F%2Fmeal.kunini.ru%2Flogin"* ]] \
     || ! grep -Fq "DNS:${domain}" "${temporary_dir}/certificate.txt"; then
     echo "Public redirect, TLS, native authentication, or Russian-locale verification failed." >&2
     exit 1
 fi
 
-printf 'Verified %s: Mealie 3.30.0, TLS, native auth, Russian default, pinned image, loopback listener, and persistent data.\n' \
+printf 'Verified %s: Mealie 3.30.0, TLS, Kunini OIDC-only auth, Russian default, pinned image, loopback listener, and persistent data.\n' \
     "${domain}"
