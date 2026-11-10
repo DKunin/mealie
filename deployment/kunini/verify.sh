@@ -38,6 +38,8 @@ https_status="$(curl --noproxy '*' --silent --output /dev/null --write-out '%{ht
     --resolve "${domain}:443:127.0.0.1" "https://${domain}/")"
 anonymous_status="$(curl --noproxy '*' --silent --output /dev/null --write-out '%{http_code}' \
     --resolve "${domain}:443:127.0.0.1" "https://${domain}/api/users/self")"
+password_login_status="$(curl --noproxy '*' --silent --output /dev/null --write-out '%{http_code}' --request POST \
+    --resolve "${domain}:443:127.0.0.1" "https://${domain}/api/auth/token")"
 locale_cookie="$(curl --noproxy '*' --silent --head --resolve "${domain}:443:127.0.0.1" \
     "https://${domain}/" | tr -d '\r' | awk 'tolower($1) == "set-cookie:" && $2 ~ /^i18n_redirected=ru-RU/ { print $2 }')"
 curl --noproxy '*' --silent --show-error --dump-header "${temporary_dir}/oidc-headers.txt" --output /dev/null \
@@ -48,7 +50,7 @@ openssl s_client -connect 127.0.0.1:443 -servername "${domain}" </dev/null 2>/de
     | openssl x509 -noout -ext subjectAltName >"${temporary_dir}/certificate.txt"
 
 if [[ "${http_status}" != "301" || "${https_status}" != "200" \
-    || "${anonymous_status}" != "401" || -z "${locale_cookie}" \
+    || "${anonymous_status}" != "401" || "${password_login_status}" != "404" || -z "${locale_cookie}" \
     || "${oidc_location}" != https://auth.kunini.ru/oidc/authorize* \
     || "${oidc_location}" != *"client_id=mealie"* \
     || "${oidc_location}" != *"redirect_uri=https%3A%2F%2Fmeal.kunini.ru%2Flogin"* ]] \
